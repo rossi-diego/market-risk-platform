@@ -4,12 +4,15 @@ Physical frames split a single contract's tonnage across three legs
 (CBOT, basis, FX). A fixation "locks" one or more legs on a subset of
 the tonnage; remaining tonnage stays open on that leg. `open_exposure_frame`
 computes per-leg open and locked tons. `aggregate_exposure` rolls frames,
-CBOT futures, basis forwards, and FX NDFs into a signed per-commodity
-view. Options are deferred to Phase 8.
+CBOT futures/swaps/options, basis forwards, and FX NDFs/options into a
+signed per-commodity view. Options contribute via their *model delta*
+(Phase 8 pricing engine) so a short OTM call dampens the linear CBOT
+exposure rather than inflating it.
 """
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 
 from app.models.basis import BasisForward
@@ -23,6 +26,7 @@ from app.models.enums import (
 )
 from app.models.fx import FXDerivative
 from app.models.physical import PhysicalFixation, PhysicalFrame
+from app.risk.options.greeks import option_delta
 from app.risk.pricing import TONS_TO_BUSHELS
 from app.risk.types import (
     AggregateExposure,
@@ -54,6 +58,14 @@ _OPTION_INSTRUMENTS: frozenset[CBOTInstrument | FXInstrument] = frozenset(
 
 def _side_sign(side: Side) -> Decimal:
     return Decimal(1) if side is Side.BUY else Decimal(-1)
+
+
+def _years_to_maturity(maturity: date, today: date | None = None) -> Decimal:
+    ref = today or date.today()
+    days = (maturity - ref).days
+    if days <= 0:
+        return Decimal(0)
+    return Decimal(days) / Decimal("365.25")
 
 
 def open_exposure_frame(frame: PhysicalFrame, fixations: list[PhysicalFixation]) -> FrameExposure:
@@ -158,17 +170,30 @@ def aggregate_exposure(
         bucket = _add_fx(bucket, sign * fe.open.fx_qty_tons)
         by_commodity[fe.commodity] = bucket
 
-    # CBOT futures: convert contracts -> tons-equivalent on the CBOT leg.
+    # CBOT futures/swaps/options: convert to tons-equivalent on the CBOT leg.
     for cd in cbot_derivs:
-        if cd.instrument in _OPTION_INSTRUMENTS:
-            raise NotImplementedError("Option delta requires Phase 8 pricing engine")
-        if cd.instrument is not CBOTInstrument.FUTURE:
-            # swaps are linear too; treat like a future on the CBOT leg.
-            pass
         bushels = TONS_TO_BUSHELS[cd.commodity]
-        tons_equiv = cd.quantity_contracts * _CBOT_CONTRACT_SIZE_BU / bushels
+        linear_tons = cd.quantity_contracts * _CBOT_CONTRACT_SIZE_BU / bushels
+        if cd.instrument in _OPTION_INSTRUMENTS:
+            years = _years_to_maturity(cd.maturity_date)
+            if cd.strike is None or years <= 0:
+                # No strike or already expired → no linear delta contribution.
+                continue
+            delta = option_delta(
+                instrument=cd.instrument,
+                spot=cd.trade_price,  # proxy for current spot; see module docstring
+                strike=cd.strike,
+                years_to_maturity=years,
+                option_type=cd.option_type,
+                barrier_type=cd.barrier_type,
+                barrier_level=cd.barrier_level,
+                rebate=cd.rebate,
+            )
+            effective_tons = linear_tons * delta
+        else:
+            effective_tons = linear_tons
         bucket = by_commodity[cd.commodity]
-        bucket = _add_cbot(bucket, _side_sign(cd.side) * tons_equiv)
+        bucket = _add_cbot(bucket, _side_sign(cd.side) * effective_tons)
         by_commodity[cd.commodity] = bucket
 
     # Basis forwards: signed tons on the basis leg.
@@ -178,10 +203,25 @@ def aggregate_exposure(
         by_commodity[bf.commodity] = bucket
 
     # FX derivatives: add signed USD notional to the dedicated bucket.
+    # FX options contribute `notional × delta` (delta from the pricing model).
     for fxd in fx_derivs:
         if fxd.instrument in _OPTION_INSTRUMENTS:
-            raise NotImplementedError("Option delta requires Phase 8 pricing engine")
-        fx_notional_usd += _side_sign(fxd.side) * fxd.notional_usd
+            years = _years_to_maturity(fxd.maturity_date)
+            if fxd.strike is None or years <= 0:
+                continue
+            delta = option_delta(
+                instrument=fxd.instrument,
+                spot=fxd.trade_rate,
+                strike=fxd.strike,
+                years_to_maturity=years,
+                option_type=fxd.option_type,
+                barrier_type=fxd.barrier_type,
+                barrier_level=fxd.barrier_level,
+                rebate=fxd.rebate,
+            )
+            fx_notional_usd += _side_sign(fxd.side) * fxd.notional_usd * delta
+        else:
+            fx_notional_usd += _side_sign(fxd.side) * fxd.notional_usd
 
     total = SignedLegExposure(
         cbot_qty_tons=sum((b.cbot_qty_tons for b in by_commodity.values()), start=Decimal(0)),

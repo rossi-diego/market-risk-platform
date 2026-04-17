@@ -15,6 +15,7 @@ from app.models.enums import (
     Commodity,
     FixationMode,
     FXInstrument,
+    OptionType,
     Side,
 )
 from app.models.fx import FXDerivative
@@ -276,52 +277,68 @@ def test_aggregate_exposure_physical_sell_flips_sign() -> None:
     assert milho.fx_qty_tons == Decimal("-500")
 
 
-@pytest.mark.parametrize(
-    "option_instr",
-    [
-        CBOTInstrument.EUROPEAN_OPTION,
-        CBOTInstrument.AMERICAN_OPTION,
-        CBOTInstrument.BARRIER_OPTION,
-    ],
-)
-def test_aggregate_exposure_raises_on_cbot_option(option_instr: CBOTInstrument) -> None:
+def test_aggregate_exposure_cbot_european_option_contributes_via_delta() -> None:
+    """Phase 8: european_option no longer raises. ATM call adds a delta-weighted tons-equiv."""
+    from datetime import timedelta
+
     opt = CBOTDerivative(
         id=uuid4(),
         user_id=uuid4(),
         commodity=Commodity.SOJA,
-        instrument=option_instr,
+        instrument=CBOTInstrument.EUROPEAN_OPTION,
+        side=Side.BUY,
+        contract="ZSK26",
+        quantity_contracts=Decimal("1"),
+        trade_date=date.today(),
+        trade_price=Decimal("1420"),
+        maturity_date=date.today() + timedelta(days=180),
+        option_type=OptionType.CALL,
+        strike=Decimal("1420"),
+    )
+    agg = aggregate_exposure([], [opt], [], [])
+    # A 1-contract ATM call has delta ~0.5, so effective CBOT tons-equiv
+    # ≈ 0.5 * 5000 / 36.744 ≈ 68 tons (positive because BUY).
+    cbot = agg.by_commodity[Commodity.SOJA].cbot_qty_tons
+    assert 50 < float(cbot) < 90
+
+
+def test_aggregate_exposure_cbot_option_missing_strike_skips() -> None:
+    opt = CBOTDerivative(
+        id=uuid4(),
+        user_id=uuid4(),
+        commodity=Commodity.SOJA,
+        instrument=CBOTInstrument.AMERICAN_OPTION,
         side=Side.BUY,
         contract="ZSK26",
         quantity_contracts=Decimal("1"),
         trade_date=date(2026, 4, 15),
         trade_price=Decimal("1420"),
         maturity_date=date(2026, 5, 15),
+        option_type=OptionType.PUT,
+        strike=None,
     )
-    with pytest.raises(NotImplementedError, match="Option delta requires Phase 8"):
-        aggregate_exposure([], [opt], [], [])
+    agg = aggregate_exposure([], [opt], [], [])
+    assert agg.by_commodity[Commodity.SOJA].cbot_qty_tons == Decimal(0)
 
 
-@pytest.mark.parametrize(
-    "option_instr",
-    [
-        FXInstrument.EUROPEAN_OPTION,
-        FXInstrument.AMERICAN_OPTION,
-        FXInstrument.BARRIER_OPTION,
-    ],
-)
-def test_aggregate_exposure_raises_on_fx_option(option_instr: FXInstrument) -> None:
+def test_aggregate_exposure_fx_option_contributes_via_delta() -> None:
+    from datetime import timedelta
+
     opt = FXDerivative(
         id=uuid4(),
         user_id=uuid4(),
-        instrument=option_instr,
+        instrument=FXInstrument.EUROPEAN_OPTION,
         side=Side.BUY,
         notional_usd=Decimal("100000"),
-        trade_date=date(2026, 4, 15),
+        trade_date=date.today(),
         trade_rate=Decimal("5.00"),
-        maturity_date=date(2026, 7, 15),
+        maturity_date=date.today() + timedelta(days=90),
+        option_type=OptionType.CALL,
+        strike=Decimal("5.00"),
     )
-    with pytest.raises(NotImplementedError, match="Option delta requires Phase 8"):
-        aggregate_exposure([], [], [], [opt])
+    agg = aggregate_exposure([], [], [], [opt])
+    # ATM FX call: delta ~0.5, signed notional ~ 50k USD
+    assert 30_000 < float(agg.fx_notional_usd) < 70_000
 
 
 def test_aggregate_exposure_cbot_swap_treated_as_linear() -> None:
