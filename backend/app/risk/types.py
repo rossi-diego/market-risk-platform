@@ -124,3 +124,36 @@ class StressResult:
     total_pnl_brl: Decimal
     per_commodity_pnl: dict[Commodity, Decimal]
     per_leg_pnl: dict[Leg, Decimal]
+
+
+@dataclass(frozen=True, slots=True)
+class PositionWeight:
+    """One position's BRL footprint + its per-factor exposure split."""
+
+    position_id: UUID
+    label: str
+    weight_brl: Decimal
+    factor_exposures: dict[str, Decimal]
+
+
+@dataclass(frozen=True, slots=True)
+class PositionContribution:
+    """Per-position contribution to the portfolio's VaR."""
+
+    position_id: UUID
+    label: str
+    contribution_brl: Decimal
+    share_pct: Decimal
+
+
+@dataclass(frozen=True, slots=True)
+class FanChartResult:
+    """Percentile bands of simulated portfolio P&L over the horizon.
+
+    `percentiles[q]` has length `horizon_days` — one value per day.
+    """
+
+    percentiles: dict[int, list[Decimal]]
+    horizon_days: int
+    n_paths: int
+    seed: int

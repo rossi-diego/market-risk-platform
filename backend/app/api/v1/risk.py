@@ -25,7 +25,10 @@ from app.core.db import get_session
 from app.core.security import UserPrincipal, get_current_user
 from app.models.enums import Commodity
 from app.models.prices import Price
+from app.risk.attribution import component_var
+from app.risk.correlation import correlation_matrix
 from app.risk.cvar import expected_shortfall
+from app.risk.mc import fan_chart_paths
 from app.risk.returns import align_multi_series, compute_returns
 from app.risk.stress import (
     HISTORICAL_SCENARIOS,
@@ -38,6 +41,7 @@ from app.risk.types import (
     CVaRResult,
     HistoricalScenario,
     Leg,
+    PositionWeight,
     SignedLegExposure,
     StressResult,
     VaRMethod,
@@ -340,6 +344,178 @@ async def recalculate(
     """Stub hit by the Airflow DAG after a price upsert. Real cache-warm in a later phase."""
     logger.info("risk.recalculate", user_id=str(principal.id))
     return RecalculateResponse(status="ok", recalculated_at=datetime.now(tz=UTC))
+
+
+# --------------------------------------------------------------------------- #
+# Phase 7 additions: MC fan chart, correlation, component VaR
+# --------------------------------------------------------------------------- #
+
+
+class FanChartRequest(BaseModel):
+    weights: dict[str, Decimal] = Field(default_factory=dict)
+    horizon_days: int = Field(default=10, ge=1, le=252)
+    n_paths: int = Field(default=10_000, ge=100)
+    seed: int | None = None
+    window: int = Field(default=252, ge=10)
+
+
+class FanChartResponse(BaseModel):
+    percentiles: dict[int, list[Decimal]]
+    horizon_days: int
+    n_paths: int
+    seed: int
+
+
+class CorrelationResponse(BaseModel):
+    names: list[str]
+    matrix: list[list[Decimal]]
+    window: int
+    n_observations: int
+
+
+class PositionWeightIn(BaseModel):
+    position_id: UUID
+    label: str
+    weight_brl: Decimal
+    factor_exposures: dict[str, Decimal]
+
+
+class AttributionRequest(BaseModel):
+    positions: list[PositionWeightIn]
+    confidence: Decimal = Field(default=Decimal("0.95"))
+    horizon_days: int = Field(default=1, ge=1)
+    window: int = Field(default=252, ge=10)
+
+
+class PositionContributionOut(BaseModel):
+    position_id: UUID
+    label: str
+    contribution_brl: Decimal
+    share_pct: Decimal
+
+
+@router.post("/mc/fan", response_model=FanChartResponse)
+async def mc_fan(
+    body: FanChartRequest,
+    principal: Annotated[UserPrincipal, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> FanChartResponse:
+    instruments = list(body.weights.keys())
+    returns = await _load_returns(session, instruments, body.window)
+    if returns.empty:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail=_detail("not enough price history for the fan chart"),
+        )
+    result = fan_chart_paths(
+        body.weights,
+        returns,
+        horizon_days=body.horizon_days,
+        n_paths=body.n_paths,
+        seed=body.seed,
+    )
+    logger.info(
+        "risk.mc.fan",
+        horizon_days=result.horizon_days,
+        n_paths=result.n_paths,
+        seed=result.seed,
+        n_observations=len(returns),
+        user_id=str(principal.id),
+    )
+    return FanChartResponse(
+        percentiles=result.percentiles,
+        horizon_days=result.horizon_days,
+        n_paths=result.n_paths,
+        seed=result.seed,
+    )
+
+
+@router.get("/correlation", response_model=CorrelationResponse)
+async def correlation_endpoint(
+    principal: Annotated[UserPrincipal, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    window: int = 252,
+    instruments: list[str] | None = None,
+) -> CorrelationResponse:
+    default_instruments = ["ZS=F", "ZC=F", "USDBRL=X"]
+    target = instruments if instruments else default_instruments
+    returns = await _load_returns(session, target, window)
+    if returns.empty:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail=_detail("not enough price history for a correlation matrix"),
+        )
+    df = returns.tail(window)
+    matrix, names = correlation_matrix(df)
+    logger.info(
+        "risk.correlation",
+        window=window,
+        n_observations=len(df),
+        n_factors=len(names),
+        user_id=str(principal.id),
+    )
+    return CorrelationResponse(
+        names=names,
+        matrix=[[Decimal(str(float(x))) for x in row] for row in matrix],
+        window=window,
+        n_observations=len(df),
+    )
+
+
+@router.post("/attribution", response_model=list[PositionContributionOut])
+async def attribution_endpoint(
+    body: AttributionRequest,
+    principal: Annotated[UserPrincipal, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> list[PositionContributionOut]:
+    if not body.positions:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail=_detail("attribution requires at least one position"),
+        )
+    # Collect all factors referenced by any position so we load the right
+    # price history.
+    factor_set: set[str] = set()
+    for p in body.positions:
+        factor_set.update(p.factor_exposures.keys())
+    returns = await _load_returns(session, sorted(factor_set), body.window)
+    if returns.empty:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail=_detail("not enough price history to attribute VaR"),
+        )
+
+    positions = [
+        PositionWeight(
+            position_id=p.position_id,
+            label=p.label,
+            weight_brl=p.weight_brl,
+            factor_exposures=p.factor_exposures,
+        )
+        for p in body.positions
+    ]
+    contributions = component_var(
+        positions,
+        returns,
+        confidence=body.confidence,
+        horizon_days=body.horizon_days,
+    )
+    logger.info(
+        "risk.attribution",
+        n_positions=len(positions),
+        confidence=str(body.confidence),
+        horizon_days=body.horizon_days,
+        user_id=str(principal.id),
+    )
+    return [
+        PositionContributionOut(
+            position_id=c.position_id,
+            label=c.label,
+            contribution_brl=c.contribution_brl,
+            share_pct=c.share_pct,
+        )
+        for c in contributions
+    ]
 
 
 # Reference for callers that want to see the built-in scenarios without auth metadata hacks.
