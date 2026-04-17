@@ -98,11 +98,11 @@ async def _run_checks() -> int:
 
     print(_green("[OK]   Connected to Supabase via transaction pooler"))
 
-    bad = [(t, a, e) for t, (a, e) in result.items() if a != e]
+    bad = [(t, got, exp) for t, (got, exp) in result.items() if got != exp]
     if bad:
         print(_yellow("[WARN] Seed counts don't match expected:"))
-        for t, a, e in bad:
-            print(f"         {t}: got {a}, expected {e}")
+        for t, got, exp in bad:
+            print(f"         {t}: got {got}, expected {exp}")
         return 1
 
     print(_green("[OK]   All 7 table counts match expected (0, 4, 2, 0, 0, 0, 0)"))

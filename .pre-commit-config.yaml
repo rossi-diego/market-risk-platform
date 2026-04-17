@@ -20,7 +20,7 @@ repos:
     rev: v1.11.2
     hooks:
       - id: mypy
-        args: [--strict]
+        args: [--strict, --config-file, backend/pyproject.toml]
         files: ^backend/app/
         additional_dependencies:
           - fastapi>=0.115
@@ -29,6 +29,9 @@ repos:
           - sqlalchemy[asyncio]>=2.0
           - structlog>=24
           - types-python-jose
+          - yfinance>=0.2
+          - pandas>=2.2
+          - pandas-stubs
 
   - repo: local
     hooks:
