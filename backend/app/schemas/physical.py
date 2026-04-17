@@ -118,3 +118,12 @@ class PhysicalFixationUpdate(BaseModel):
 
 class PhysicalFrameDetailOut(PhysicalFrameOut):
     fixations: list[PhysicalFixationOut] = []
+
+
+class PhysicalFrameWithExposureOut(PhysicalFrameOut):
+    open_cbot_tons: Decimal
+    open_basis_tons: Decimal
+    open_fx_tons: Decimal
+    locked_cbot_tons: Decimal
+    locked_basis_tons: Decimal
+    locked_fx_tons: Decimal
