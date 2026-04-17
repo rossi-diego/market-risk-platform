@@ -28,6 +28,7 @@ If validation fails at any step, STOP before commit and print the COWORK HANDOFF
 - `[project]`: `name="market-risk-platform-backend"`, `version="0.1.0"`, `requires-python=">=3.12,<3.13"`.
 - Runtime dependencies (pin major version, latest minor as of today):
   - `fastapi>=0.115`
+  - `uvicorn[standard]>=0.30`
   - `sqlalchemy[asyncio]>=2.0`
   - `asyncpg>=0.29`
   - `alembic>=1.13`

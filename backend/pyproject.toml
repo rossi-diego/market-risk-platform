@@ -19,6 +19,7 @@ dependencies = [
     "scipy>=1.13",
     "yfinance>=0.2",
     "httpx>=0.27",
+    "uvicorn[standard]>=0.44.0",
 ]
 
 [dependency-groups]
