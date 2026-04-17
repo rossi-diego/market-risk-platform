@@ -205,3 +205,10 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Claude Code / Cowork skills
+# Source of truth lives in .claude/skills/<name>/SKILL.md (committed).
+# Ignore per-machine settings, the built plugin bundle, and the legacy .skill archive.
+.claude/settings.local.json
+.claude/skills/_archive/
+.claude/*.plugin
