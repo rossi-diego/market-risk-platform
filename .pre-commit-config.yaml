@@ -1,0 +1,42 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^backend/
+      - id: ruff-format
+        files: ^backend/
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.11.2
+    hooks:
+      - id: mypy
+        args: [--strict]
+        files: ^backend/app/
+        additional_dependencies:
+          - fastapi>=0.115
+          - pydantic>=2.7
+          - pydantic-settings>=2.4
+          - sqlalchemy[asyncio]>=2.0
+          - structlog>=24
+          - types-python-jose
+
+  - repo: local
+    hooks:
+      - id: prettier
+        name: prettier (frontend)
+        language: system
+        entry: bash frontend/scripts/prettier-check.sh
+        files: ^frontend/
+        exclude: ^frontend/(node_modules|\.next|public|pnpm-lock\.yaml|next-env\.d\.ts|scripts/|\.prettierignore$|\.gitignore$)
+        types_or: [javascript, jsx, ts, tsx, css, scss, json, yaml, markdown]
+        pass_filenames: true

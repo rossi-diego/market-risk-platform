@@ -94,9 +94,9 @@ Use the Supabase MCP to inspect live schema when writing migrations.
 
 ```
 Claude (via Supabase MCP):
-"SELECT feed_name, price_date, close_price, price_source 
- FROM prices 
- ORDER BY price_date DESC 
+"SELECT feed_name, price_date, close_price, price_source
+ FROM prices
+ ORDER BY price_date DESC
  LIMIT 10"
 ```
 
@@ -113,7 +113,7 @@ Prompt: "implement 10-day parametric VaR for a multi-position portfolio"
 ### Importing positions
 
 ```
-Prompt: "write the ingestion logic for the position import endpoint"  
+Prompt: "write the ingestion logic for the position import endpoint"
 → supabase-fastapi-async skill triggers (Storage upload pattern)
 → IMPORT_SCHEMA KB provides exact column names and validation rules
 → Claude generates code with correct Pydantic schema

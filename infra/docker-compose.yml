@@ -1,0 +1,28 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: mrp
+      POSTGRES_PASSWORD: mrp_dev
+      POSTGRES_DB: mrp
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  # TODO: uncomment in Phase 4
+  # airflow:
+  #   image: apache/airflow:2.9-python3.12
+  #   depends_on:
+  #     - postgres
+  #   ports:
+  #     - "8080:8080"
+  #   environment:
+  #     AIRFLOW__CORE__EXECUTOR: LocalExecutor
+  #     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://mrp:mrp_dev@postgres:5432/mrp
+  #     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+  #   volumes:
+  #     - ./airflow/dags:/opt/airflow/dags
+
+volumes:
+  pgdata:

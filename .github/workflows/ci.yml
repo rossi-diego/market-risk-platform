@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      SUPABASE_URL: https://example.supabase.co
+      SUPABASE_ANON_KEY: ci-anon
+      SUPABASE_SERVICE_ROLE_KEY: ci-service-role
+      SUPABASE_JWT_SECRET: ci-jwt-secret
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - name: Sync deps
+        run: uv sync
+      - name: Ruff
+        run: uv run ruff check .
+      - name: Mypy
+        run: uv run mypy app/
+      - name: Pytest
+        run: uv run pytest
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm lint
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Format check
+        run: pnpm format:check
+      - name: Build
+        run: pnpm build

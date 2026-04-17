@@ -1292,7 +1292,7 @@ Claude Code prompt:
 ```
 Goal: harden for production.
 
-1. backend/app/core/logging.py: structlog com processors (add_timestamp, format_exc_info, JSONRenderer). Contextvars em cada request (request_id, user_id). 
+1. backend/app/core/logging.py: structlog com processors (add_timestamp, format_exc_info, JSONRenderer). Contextvars em cada request (request_id, user_id).
 2. Sentry SDK em backend (FastAPI integration) + frontend (Next.js integration). ENV-gated: só ativa em production.
 3. docs/DEPLOY.md: passo-a-passo para Render (create web service, env vars, health check path, auto-deploy from main).
 4. .github/workflows/ci.yml finalizado: require branch protection, all checks must pass (lint + type + test + build).
