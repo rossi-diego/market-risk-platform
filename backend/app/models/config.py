@@ -2,21 +2,18 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, Enum, Numeric, String, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, Numeric, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import Base
+from app.models.base import Base, pg_enum
 from app.models.enums import Commodity
 
 
 class MTMPremium(Base):
     __tablename__ = "mtm_premiums"
 
-    commodity: Mapped[Commodity] = mapped_column(
-        Enum(Commodity, name="commodity", native_enum=True, create_type=False),
-        primary_key=True,
-    )
+    commodity: Mapped[Commodity] = mapped_column(pg_enum(Commodity, "commodity"), primary_key=True)
     premium_usd_bu: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

@@ -69,11 +69,18 @@ module = [
     "passlib.*",
     "openpyxl",
     "openpyxl.*",
+    "httpx",
+    "httpx.*",
 ]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# Share one event loop across the whole test session so module-level async
+# resources (SQLAlchemy engines, asyncpg connection pool) stay bound to the
+# same loop for the lifetime of the run.
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
 # Coverage is opt-in per-invocation (scoped via --cov on the command line).
 # The global floor below only bites when a --cov target is supplied.
 addopts = "--strict-markers"

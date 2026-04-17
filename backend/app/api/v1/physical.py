@@ -61,13 +61,13 @@ def _to_exposure_out(
     return PhysicalFrameWithExposureOut(
         id=frame.id,
         user_id=frame.user_id,
-        commodity=frame.commodity.value,
-        side=frame.side.value,
+        commodity=frame.commodity,  # type: ignore[arg-type]
+        side=frame.side,  # type: ignore[arg-type]
         quantity_tons=frame.quantity_tons,
         delivery_start=frame.delivery_start,
         delivery_end=frame.delivery_end,
         counterparty=frame.counterparty,
-        status=frame.status.value,
+        status=frame.status,  # type: ignore[arg-type]
         notes=frame.notes,
         created_at=frame.created_at,
         updated_at=frame.updated_at,
@@ -132,7 +132,7 @@ async def create_frame(
         instrument_table="physical_frames",
         instrument_id=frame.id,
         quantity=frame.quantity_tons,
-        payload={"commodity": frame.commodity.value, "side": frame.side.value},
+        payload={"commodity": frame.commodity, "side": frame.side},
     )
     await session.commit()
     await session.refresh(frame)
@@ -264,7 +264,7 @@ async def create_fixation(
         quantity=tentative.quantity_tons,
         payload={
             "fixation_id": str(tentative.id),
-            "mode": tentative.fixation_mode.value,
+            "mode": tentative.fixation_mode,
             "qty": str(tentative.quantity_tons),
         },
     )

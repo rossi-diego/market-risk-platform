@@ -90,7 +90,7 @@ async def client(test_user_token: tuple[str, str]) -> AsyncIterator[httpx.AsyncC
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(
         transport=transport,
-        base_url="http://test",
+        base_url="http://testserver",
         headers={"Authorization": f"Bearer {token}"},
     ) as c:
         yield c

@@ -105,7 +105,7 @@ async def create_fx(
         instrument_id=row.id,
         quantity=row.notional_usd,
         price=row.trade_rate,
-        payload={"instrument": row.instrument.value, "side": row.side.value},
+        payload={"instrument": row.instrument, "side": row.side},
     )
     await session.commit()
     await session.refresh(row)

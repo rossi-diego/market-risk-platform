@@ -2,11 +2,11 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, Enum, Numeric, String, func
+from sqlalchemy import DateTime, Numeric, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import Base
+from app.models.base import Base, pg_enum
 from app.models.enums import Commodity, PriceSource
 
 
@@ -19,13 +19,12 @@ class Price(Base):
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     instrument: Mapped[str] = mapped_column(String, nullable=False)
     commodity: Mapped[Commodity | None] = mapped_column(
-        Enum(Commodity, name="commodity", native_enum=True, create_type=False), nullable=True
+        pg_enum(Commodity, "commodity"), nullable=True
     )
     value: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
     unit: Mapped[str] = mapped_column(String, nullable=False)
     price_source: Mapped[PriceSource] = mapped_column(
-        Enum(PriceSource, name="price_source", native_enum=True, create_type=False),
-        nullable=False,
+        pg_enum(PriceSource, "price_source"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

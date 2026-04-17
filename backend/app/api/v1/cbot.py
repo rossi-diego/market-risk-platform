@@ -111,7 +111,7 @@ async def create_cbot(
         instrument_id=row.id,
         quantity=row.quantity_contracts,
         price=row.trade_price,
-        payload={"instrument": row.instrument.value, "side": row.side.value},
+        payload={"instrument": row.instrument, "side": row.side},
     )
     await session.commit()
     await session.refresh(row)

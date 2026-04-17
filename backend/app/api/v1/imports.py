@@ -191,7 +191,7 @@ async def commit_import(
                     "import_id": str(import_id),
                     "source": "excel",
                     "fixation_id": str(fx.id),
-                    "mode": fx.fixation_mode.value,
+                    "mode": fx.fixation_mode,
                 },
             )
             inserted["fixations"] += 1
