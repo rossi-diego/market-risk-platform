@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Playwright e2e suite intentionally not installed during Phase 10 scaffold.
+    "e2e/**",
   ]),
 ]);
 

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { CommandPalette } from "@/components/command/command-palette";
 import { AppSidebar } from "@/components/dashboard/app-sidebar";
 import { DashboardBreadcrumbs } from "@/components/dashboard/dashboard-breadcrumbs";
 import { UserMenu } from "@/components/dashboard/user-menu";
@@ -32,6 +33,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <UserMenu email={user.email ?? ""} />
         </header>
         <main className="flex-1 p-6">{children}</main>
+        <CommandPalette />
       </SidebarInset>
     </SidebarProvider>
   );

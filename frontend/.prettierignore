@@ -7,3 +7,4 @@ coverage
 pnpm-lock.yaml
 public
 next-env.d.ts
+e2e
