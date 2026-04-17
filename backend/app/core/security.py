@@ -90,7 +90,7 @@ async def _get_jwk(kid: str) -> dict[str, Any] | None:
 # --------------------------------------------------------------------------- #
 
 
-async def get_current_user(authorization: str = Header(...)) -> UserPrincipal:
+async def get_current_user(authorization: str | None = Header(default=None)) -> UserPrincipal:
     if not authorization or not authorization.lower().startswith("bearer "):
         raise _problem(
             "missing or malformed bearer token",

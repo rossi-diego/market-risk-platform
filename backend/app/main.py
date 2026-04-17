@@ -16,6 +16,7 @@ from app.api.v1 import cbot as cbot_router
 from app.api.v1 import fx as fx_router
 from app.api.v1 import imports as imports_router
 from app.api.v1 import physical as physical_router
+from app.api.v1 import risk as risk_router
 from app.core.config import settings
 from app.core.logging import configure_logging
 
@@ -86,5 +87,6 @@ api_router.include_router(cbot_router.router)
 api_router.include_router(basis_router.router)
 api_router.include_router(fx_router.router)
 api_router.include_router(imports_router.router)
+api_router.include_router(risk_router.router)
 
 app.include_router(api_router)
