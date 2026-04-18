@@ -102,9 +102,13 @@ export default function ImportPositionsPage() {
             <p className="text-sm font-medium">Arraste seu .xlsx aqui ou clique para selecionar</p>
             <p className="text-muted-foreground mt-1 text-xs">
               Precisa de um modelo?{" "}
-              <Link href="/docs/example_import.xlsx" className="text-foreground underline">
+              <a
+                href={`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1"}/imports/template`}
+                className="text-foreground underline"
+                download
+              >
                 Baixar template
-              </Link>
+              </a>
             </p>
           </div>
           {file && (
