@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     SUPABASE_JWT_SECRET: str
     DATABASE_URL: str
 
+    ENVIRONMENT: str = "development"
+    SENTRY_DSN: str | None = None
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.05
+    RATE_LIMIT_RISK: str = "60/minute"
+
     # NoDecode prevents pydantic-settings from eagerly JSON-decoding; the
     # validator below accepts JSON arrays, CSV, and uv-stripped "[a,b]" forms.
     CORS_ORIGINS: Annotated[list[str], NoDecode] = ["http://localhost:3000"]

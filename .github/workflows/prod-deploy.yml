@@ -1,0 +1,75 @@
+name: Prod deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/prod-deploy.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: prod-deploy
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      SUPABASE_URL: https://example.supabase.co
+      SUPABASE_ANON_KEY: ci-anon
+      SUPABASE_SERVICE_ROLE_KEY: ci-service-role
+      SUPABASE_JWT_SECRET: ci-jwt-secret
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/postgres
+      ENVIRONMENT: ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - name: Sync deps
+        run: uv sync
+      - name: Quick tests
+        run: uv run pytest -q
+
+  trigger-render:
+    needs: smoke
+    runs-on: ubuntu-latest
+    if: ${{ vars.RENDER_DEPLOY_HOOK_SET == 'true' }}
+    steps:
+      - name: Trigger Render deploy
+        env:
+          RENDER_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [[ -z "$RENDER_HOOK" ]]; then
+            echo "RENDER_DEPLOY_HOOK secret missing — skipping."
+            exit 0
+          fi
+          curl -fsS -X POST "$RENDER_HOOK" -d '{}'
+
+  prod-smoke:
+    needs: trigger-render
+    runs-on: ubuntu-latest
+    if: ${{ vars.PROD_BACKEND_URL != '' }}
+    steps:
+      - name: Wait for prod to be healthy
+        env:
+          URL: ${{ vars.PROD_BACKEND_URL }}
+        run: |
+          echo "Polling $URL/api/v1/health for up to 3 minutes"
+          for _ in $(seq 1 36); do
+            if curl -fsS "$URL/api/v1/health" >/dev/null; then
+              echo "prod is healthy"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "prod did not become healthy"
+          exit 1

@@ -1,15 +1,10 @@
-import time
-import uuid
 from contextlib import asynccontextmanager
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, FastAPI, Request
+from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import Response
-from starlette.types import ASGIApp
 
 from app.api.v1 import basis as basis_router
 from app.api.v1 import cbot as cbot_router
@@ -21,6 +16,9 @@ from app.api.v1 import risk as risk_router
 from app.api.v1 import scenarios as scenarios_router
 from app.core.config import settings
 from app.core.logging import configure_logging
+from app.core.sentry import init_sentry
+from app.middleware.rate_limit import RateLimitMiddleware
+from app.middleware.request_log import RequestLoggingMiddleware
 
 logger = structlog.get_logger(__name__)
 
@@ -29,38 +27,23 @@ api_router = APIRouter(prefix="/api/v1")
 
 @api_router.get("/health")
 async def health() -> dict[str, str]:
-    return {"status": "ok", "version": settings.APP_VERSION}
-
-
-class RequestLoggingMiddleware(BaseHTTPMiddleware):
-    """Emit a structured log line per request with request_id, user_id, timing."""
-
-    def __init__(self, app: ASGIApp) -> None:
-        super().__init__(app)
-
-    async def dispatch(self, request: Request, call_next: Any) -> Response:
-        request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
-        start = time.perf_counter()
-        response: Response = await call_next(request)
-        duration_ms = int((time.perf_counter() - start) * 1000)
-        user_id = request.headers.get("x-user-id") or "anonymous"
-        response.headers["x-request-id"] = request_id
-        logger.info(
-            "http.request",
-            request_id=request_id,
-            method=request.method,
-            path=request.url.path,
-            status_code=response.status_code,
-            duration_ms=duration_ms,
-            user_id=user_id,
-        )
-        return response
+    return {
+        "status": "ok",
+        "version": settings.APP_VERSION,
+        "environment": settings.ENVIRONMENT,
+    }
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> Any:
     configure_logging(settings.LOG_LEVEL)
-    logger.info("app.startup", version=settings.APP_VERSION)
+    sentry_on = init_sentry()
+    logger.info(
+        "app.startup",
+        version=settings.APP_VERSION,
+        environment=settings.ENVIRONMENT,
+        sentry=sentry_on,
+    )
     yield
     logger.info("app.shutdown", version=settings.APP_VERSION)
 
@@ -71,17 +54,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+_TRUSTED_HOSTS = ["localhost", "127.0.0.1", "testserver", "*.vercel.app", "*.onrender.com"]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["authorization", "content-type", "x-request-id"],
 )
-app.add_middleware(
-    TrustedHostMiddleware,
-    allowed_hosts=["localhost", "127.0.0.1", "testserver", "*.vercel.app"],
-)
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=_TRUSTED_HOSTS)
+app.add_middleware(RateLimitMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 
 api_router.include_router(physical_router.router)

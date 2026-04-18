@@ -22,6 +22,7 @@ dependencies = [
     "uvicorn[standard]>=0.44.0",
     "python-multipart>=0.0.9",
     "reportlab>=4.2",
+    "sentry-sdk[fastapi]>=2.0",
 ]
 
 [dependency-groups]
