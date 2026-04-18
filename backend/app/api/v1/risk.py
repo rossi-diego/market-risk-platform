@@ -121,8 +121,11 @@ class RecalculateResponse(BaseModel):
 # --------------------------------------------------------------------------- #
 
 
-def _detail(title: str) -> dict[str, object]:
-    return {"type": "about:blank", "title": title}
+def _detail(title: str, extra: dict[str, object] | None = None) -> dict[str, object]:
+    body: dict[str, object] = {"type": "about:blank", "title": title}
+    if extra:
+        body.update(extra)
+    return body
 
 
 def _to_va_response(r: VaRResult) -> VaRResponse:
@@ -313,20 +316,42 @@ async def stress_historical(
 async def stress_custom(
     body: CustomScenarioBody,
     principal: Annotated[UserPrincipal, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
 ) -> StressResponseRow:
     if body.scenario is None and body.scenario_id is None:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             detail=_detail("provide either scenario or scenario_id"),
         )
+
     scenario = body.scenario
-    if scenario is None:
-        # DB-loaded scenarios can be added in a later phase; for now require
-        # an inline scenario payload so this endpoint is callable standalone.
-        raise HTTPException(
-            status.HTTP_501_NOT_IMPLEMENTED,
-            detail=_detail("scenario_id lookup not implemented yet; pass scenario inline"),
+    if scenario is None and body.scenario_id is not None:
+        from app.models.config import Scenario as ScenarioModel
+
+        row = (
+            await session.execute(
+                select(ScenarioModel).where(
+                    ScenarioModel.id == body.scenario_id,
+                    ScenarioModel.user_id == principal.id,
+                )
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                detail=_detail("scenario not found", {"scenario_id": str(body.scenario_id)}),
+            )
+        scenario = HistoricalScenario(
+            name=row.name,
+            cbot_soja=row.cbot_soja_shock_pct,
+            cbot_milho=row.cbot_milho_shock_pct,
+            basis_soja=row.basis_soja_shock_pct,
+            basis_milho=row.basis_milho_shock_pct,
+            fx=row.fx_shock_pct,
+            source_period=row.source_period or "user",
         )
+
+    assert scenario is not None  # narrowed by the branches above
     exposure = _build_exposure(body.exposure_tons_by_commodity)
     result = apply_scenario(exposure, body.prices_current, scenario)
     logger.info(

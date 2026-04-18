@@ -8,6 +8,7 @@ import { ExportReportButton } from "@/components/risk/export-report-button";
 import { FanChart } from "@/components/risk/fan-chart";
 import { useRiskPortfolio } from "@/components/risk/portfolio-store";
 import { RiskControls } from "@/components/risk/risk-controls";
+import { SensitivitySliders } from "@/components/risk/sensitivity-sliders";
 import { StressPanel } from "@/components/risk/stress-panel";
 import { VarCard } from "@/components/risk/var-card";
 import { useCVar, useFan, useStressHistorical, useVar } from "@/lib/api/hooks/use-risk";
@@ -87,6 +88,8 @@ export default function RiskPage() {
       <FanChart data={fanQuery.data} isLoading={fanQuery.isLoading} />
 
       <StressPanel />
+
+      <SensitivitySliders />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <AttributionTable />
